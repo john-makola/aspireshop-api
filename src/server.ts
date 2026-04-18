@@ -118,7 +118,19 @@ app.get("/api/debug-db", async (_req, res) => {
     results.tcpError = e.message;
   }
 
-  // 3. Prisma connection test
+  // 3. Raw pg client test (bypasses Prisma engine)
+  try {
+    const { Client } = await import("pg");
+    const client = new Client({ connectionString: url });
+    await client.connect();
+    const result = await client.query('SELECT count(*) FROM "Product"');
+    results.pgDirect = { success: true, productCount: result.rows[0].count };
+    await client.end();
+  } catch (e: any) {
+    results.pgDirect = { success: false, error: e.message?.substring(0, 300) };
+  }
+
+  // 4. Prisma connection test
   try {
     const prisma = (await import("./lib/prisma")).default;
     const count = await prisma.product.count();
