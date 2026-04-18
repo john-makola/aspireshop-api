@@ -99,31 +99,52 @@ app.get("/api/debug-db", async (_req, res) => {
     results.dnsError = e.message;
   }
 
-  // 2. TCP connection test
+  // 2. TCP connection test (IPv4 and IPv6)
   try {
     const parsed = new URL(url);
     const port = parseInt(parsed.port) || 5432;
-    const tcpResult = await new Promise<string>((resolve) => {
-      const sock = new net.Socket();
-      sock.setTimeout(5000);
-      sock.connect(port, parsed.hostname, () => {
-        resolve("connected");
-        sock.destroy();
-      });
-      sock.on("timeout", () => { resolve("timeout"); sock.destroy(); });
-      sock.on("error", (err: Error) => { resolve(`error: ${err.message}`); });
-    });
-    results.tcp = tcpResult;
+    for (const family of [4, 6] as const) {
+      try {
+        const { address } = await dns.promises.lookup(parsed.hostname, { family });
+        const host = family === 6 ? `[${address}]` : address;
+        const tcpResult = await new Promise<string>((resolve) => {
+          const sock = new net.Socket();
+          sock.setTimeout(5000);
+          sock.connect(port, address, () => {
+            resolve("connected");
+            sock.destroy();
+          });
+          sock.on("timeout", () => { resolve("timeout"); sock.destroy(); });
+          sock.on("error", (err: Error) => { resolve(`error: ${err.message}`); });
+        });
+        results[`tcp_v${family}`] = { address: host, result: tcpResult };
+      } catch (e: any) {
+        results[`tcp_v${family}`] = { error: e.message };
+      }
+    }
   } catch (e: any) {
     results.tcpError = e.message;
   }
 
-  // 3. Raw pg client test — try plain, then SSL
-  for (const mode of ["plain", "ssl"] as const) {
+  // 3. Raw pg client test — try plain, SSL, and IPv6
+  for (const mode of ["plain", "ssl", "ipv6"] as const) {
     try {
       const { Client } = await import("pg");
-      const opts: any = { connectionString: url };
-      if (mode === "ssl") opts.ssl = { rejectUnauthorized: false };
+      let opts: any;
+      if (mode === "ipv6") {
+        const { address } = await dns.promises.lookup(new URL(url).hostname, { family: 6 });
+        const parsed = new URL(url);
+        opts = {
+          host: address,
+          port: parseInt(parsed.port) || 5432,
+          user: parsed.username,
+          password: decodeURIComponent(parsed.password),
+          database: parsed.pathname.slice(1),
+        };
+      } else {
+        opts = { connectionString: url };
+        if (mode === "ssl") opts.ssl = { rejectUnauthorized: false };
+      }
       const client = new Client(opts);
       await client.connect();
       const result = await client.query('SELECT count(*) FROM "Product"');
