@@ -7,7 +7,7 @@ WORKDIR /app
 COPY package.json package-lock.json* ./
 COPY prisma ./prisma
 COPY prisma.config.ts ./
-ENV DATABASE_URL="postgresql://dummy:dummy@localhost:5432/dummy"
+ARG DATABASE_URL="postgresql://dummy:dummy@localhost:5432/dummy"
 RUN npm install
 
 COPY tsconfig.json ./
@@ -23,9 +23,8 @@ WORKDIR /app
 COPY package.json package-lock.json* ./
 COPY prisma ./prisma
 COPY prisma.config.ts ./
-ENV DATABASE_URL="postgresql://dummy:dummy@localhost:5432/dummy"
+ARG DATABASE_URL="postgresql://dummy:dummy@localhost:5432/dummy"
 RUN npm install --omit=dev
-ENV DATABASE_URL=""
 
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/dist ./dist
