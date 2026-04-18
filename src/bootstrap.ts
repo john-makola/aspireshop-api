@@ -1,4 +1,7 @@
-// Simple entry point — just start the server.
-// DNS resolution is no longer needed since we use the pg driver adapter
-// which uses Node.js networking (handles Railway internal DNS natively).
+import dns from "dns";
+
+// Force Node.js to prefer IPv4 — Railway internal DNS returns IPv6 first
+// which causes pg connections to fail silently.
+dns.setDefaultResultOrder("ipv4first");
+
 import "./server";
