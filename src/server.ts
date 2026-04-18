@@ -118,16 +118,20 @@ app.get("/api/debug-db", async (_req, res) => {
     results.tcpError = e.message;
   }
 
-  // 3. Raw pg client test (bypasses Prisma engine)
-  try {
-    const { Client } = await import("pg");
-    const client = new Client({ connectionString: url });
-    await client.connect();
-    const result = await client.query('SELECT count(*) FROM "Product"');
-    results.pgDirect = { success: true, productCount: result.rows[0].count };
-    await client.end();
-  } catch (e: any) {
-    results.pgDirect = { success: false, error: e.message?.substring(0, 300) };
+  // 3. Raw pg client test — try plain, then SSL
+  for (const mode of ["plain", "ssl"] as const) {
+    try {
+      const { Client } = await import("pg");
+      const opts: any = { connectionString: url };
+      if (mode === "ssl") opts.ssl = { rejectUnauthorized: false };
+      const client = new Client(opts);
+      await client.connect();
+      const result = await client.query('SELECT count(*) FROM "Product"');
+      results[`pg_${mode}`] = { success: true, productCount: result.rows[0].count };
+      await client.end();
+    } catch (e: any) {
+      results[`pg_${mode}`] = { success: false, error: e.message?.substring(0, 300) };
+    }
   }
 
   // 4. Prisma connection test
