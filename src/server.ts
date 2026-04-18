@@ -99,29 +99,53 @@ app.get("/api/debug-db", async (_req, res) => {
     results.dnsError = e.message;
   }
 
-  // 2. TCP connection test (IPv4 and IPv6)
+  // 2. TCP + protocol detection test
   try {
     const parsed = new URL(url);
     const port = parseInt(parsed.port) || 5432;
-    for (const family of [4, 6] as const) {
-      try {
-        const { address } = await dns.promises.lookup(parsed.hostname, { family });
-        const host = family === 6 ? `[${address}]` : address;
-        const tcpResult = await new Promise<string>((resolve) => {
-          const sock = new net.Socket();
-          sock.setTimeout(5000);
-          sock.connect(port, address, () => {
-            resolve("connected");
-            sock.destroy();
-          });
-          sock.on("timeout", () => { resolve("timeout"); sock.destroy(); });
-          sock.on("error", (err: Error) => { resolve(`error: ${err.message}`); });
-        });
-        results[`tcp_v${family}`] = { address: host, result: tcpResult };
-      } catch (e: any) {
-        results[`tcp_v${family}`] = { error: e.message };
-      }
-    }
+    const { address } = await dns.promises.lookup(parsed.hostname, { family: 4 });
+    results.resolvedIp = address;
+
+    // TCP connect + send Postgres StartupMessage, check response
+    const protoResult = await new Promise<Record<string, unknown>>((resolve) => {
+      const sock = new net.Socket();
+      sock.setTimeout(5000);
+      sock.connect(port, address, () => {
+        // Send PostgreSQL StartupMessage (protocol 3.0)
+        const params = `user\0postgres\0database\0railway\0\0`;
+        const len = 4 + 4 + Buffer.byteLength(params);
+        const buf = Buffer.alloc(len);
+        buf.writeInt32BE(len, 0);
+        buf.writeInt32BE(196608, 4);
+        buf.write(params, 8);
+        sock.write(buf);
+      });
+      sock.on("data", (data: Buffer) => {
+        const firstByte = String.fromCharCode(data[0]);
+        const hex = data.subarray(0, 50).toString("hex");
+        const text = data.subarray(0, 100).toString("utf8").replace(/[\x00-\x1f]/g, " ");
+        resolve({ firstByte, hex, text, isPostgres: firstByte === "R" || firstByte === "E" });
+        sock.destroy();
+      });
+      sock.on("timeout", () => { resolve({ error: "timeout" }); sock.destroy(); });
+      sock.on("error", (err: Error) => { resolve({ error: err.message }); });
+      sock.on("close", () => { resolve({ error: "closed before response" }); });
+    });
+    results.protocol = protoResult;
+
+    // Also try HTTP GET to see if it's an HTTP server
+    const http = await import("http");
+    const httpResult = await new Promise<string>((resolve) => {
+      const req = http.request({ hostname: address, port, path: "/", method: "GET", timeout: 3000 }, (res) => {
+        let body = "";
+        res.on("data", (d: Buffer) => { body += d.toString(); });
+        res.on("end", () => { resolve(`HTTP ${res.statusCode}: ${body.substring(0, 200)}`); });
+      });
+      req.on("error", (e: Error) => resolve(`error: ${e.message}`));
+      req.on("timeout", () => { resolve("timeout"); req.destroy(); });
+      req.end();
+    });
+    results.httpTest = httpResult;
   } catch (e: any) {
     results.tcpError = e.message;
   }
