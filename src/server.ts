@@ -78,6 +78,58 @@ app.get("/api/health", (_req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
 });
 
+// Debug endpoint — diagnose DB connectivity from inside the container
+app.get("/api/debug-db", async (_req, res) => {
+  const dns = await import("dns");
+  const net = await import("net");
+  const url = process.env.DATABASE_URL || "NOT SET";
+  const results: Record<string, unknown> = {
+    DATABASE_URL: url.replace(/\/\/.*@/, "//***@"),
+  };
+
+  // 1. DNS resolution
+  try {
+    const host = new URL(url).hostname;
+    results.host = host;
+    const addresses4 = await dns.promises.resolve4(host).catch(() => []);
+    const addresses6 = await dns.promises.resolve6(host).catch(() => []);
+    const lookup = await dns.promises.lookup(host, { all: true }).catch((e: Error) => e.message);
+    results.dns = { ipv4: addresses4, ipv6: addresses6, lookup };
+  } catch (e: any) {
+    results.dnsError = e.message;
+  }
+
+  // 2. TCP connection test
+  try {
+    const parsed = new URL(url);
+    const port = parseInt(parsed.port) || 5432;
+    const tcpResult = await new Promise<string>((resolve) => {
+      const sock = new net.Socket();
+      sock.setTimeout(5000);
+      sock.connect(port, parsed.hostname, () => {
+        resolve("connected");
+        sock.destroy();
+      });
+      sock.on("timeout", () => { resolve("timeout"); sock.destroy(); });
+      sock.on("error", (err: Error) => { resolve(`error: ${err.message}`); });
+    });
+    results.tcp = tcpResult;
+  } catch (e: any) {
+    results.tcpError = e.message;
+  }
+
+  // 3. Prisma connection test
+  try {
+    const prisma = (await import("./lib/prisma")).default;
+    const count = await prisma.product.count();
+    results.prisma = { success: true, productCount: count };
+  } catch (e: any) {
+    results.prisma = { success: false, error: e.message?.substring(0, 300) };
+  }
+
+  res.json(results);
+});
+
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`Backend API server running on port ${PORT}`);
   console.log(`CORS origins: ${allowedOrigins.join(", ")}`);
