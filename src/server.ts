@@ -81,6 +81,8 @@ app.get("/api/health", (_req, res) => {
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`Backend API server running on port ${PORT}`);
   console.log(`CORS origins: ${allowedOrigins.join(", ")}`);
+  const dbUrl = process.env.DATABASE_URL || "NOT SET";
+  console.log(`DATABASE_URL host: ${dbUrl.replace(/\/\/.*@/, "//***@")}`);
 });
 
 export default app;
