@@ -32,4 +32,4 @@ COPY public ./public
 
 EXPOSE ${PORT:-4000}
 
-CMD ["node", "dist/server.js"]
+CMD ["node", "dist/bootstrap.js"]
