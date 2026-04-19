@@ -26,12 +26,14 @@ const PORT = parseInt(process.env.PORT || "4000", 10);
 // CORS — allow the static frontend origin(s)
 const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:3000";
 const allowedOrigins = FRONTEND_URL.split(",").map((o) => o.trim());
+console.log("CORS origins:", allowedOrigins.join(", "));
 app.use(
   cors({
     origin: (origin, callback) => {
       if (!origin || allowedOrigins.includes(origin)) {
         callback(null, true);
       } else {
+        console.warn(`CORS blocked origin: ${origin}`);
         callback(new Error("Not allowed by CORS"));
       }
     },
