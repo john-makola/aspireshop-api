@@ -38,7 +38,7 @@ app.use(
       }
     },
     credentials: true,
-  })
+  }),
 );
 
 app.use(express.json({ limit: "10mb" }));
@@ -47,12 +47,26 @@ app.use(cookieParser());
 // Serve uploaded files and static assets
 app.use(
   "/uploads",
-  express.static(process.env.UPLOAD_DIR || path.join(process.cwd(), "public", "uploads"))
+  express.static(
+    process.env.UPLOAD_DIR || path.join(process.cwd(), "public", "uploads"),
+  ),
 );
-app.use("/categories", express.static(path.join(process.cwd(), "public", "categories")));
-app.use("/sliders", express.static(path.join(process.cwd(), "public", "sliders")));
-app.use("/features", express.static(path.join(process.cwd(), "public", "features")));
-app.use("/banners", express.static(path.join(process.cwd(), "public", "banners")));
+app.use(
+  "/categories",
+  express.static(path.join(process.cwd(), "public", "categories")),
+);
+app.use(
+  "/sliders",
+  express.static(path.join(process.cwd(), "public", "sliders")),
+);
+app.use(
+  "/features",
+  express.static(path.join(process.cwd(), "public", "features")),
+);
+app.use(
+  "/banners",
+  express.static(path.join(process.cwd(), "public", "banners")),
+);
 
 // --- Public Routes ---
 app.use("/api/auth", authRoutes);

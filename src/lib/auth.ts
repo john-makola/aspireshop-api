@@ -34,9 +34,13 @@ export function verifyToken(token: string): JwtPayload | null {
   }
 }
 
-/** Extract session from the `token` cookie */
+/** Extract session from the `token` cookie or Authorization header */
 export function getSession(req: Request): JwtPayload | null {
-  const token = req.cookies?.token;
+  const token =
+    req.cookies?.token ||
+    (req.headers.authorization?.startsWith("Bearer ")
+      ? req.headers.authorization.slice(7)
+      : null);
   if (!token) return null;
   return verifyToken(token);
 }
