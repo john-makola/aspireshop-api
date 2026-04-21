@@ -10,11 +10,11 @@ COPY prisma.config.ts ./
 ARG DATABASE_URL="postgresql://dummy:dummy@localhost:5432/dummy"
 ENV DATABASE_URL=${DATABASE_URL}
 ENV PRISMA_SKIP_POSTINSTALL_GENERATE=true
-RUN npm install
+RUN npm install --ignore-scripts
 
 COPY tsconfig.json ./
 COPY src ./src
-RUN npx prisma generate
+RUN DATABASE_URL="postgresql://dummy:dummy@localhost:5432/dummy" npx prisma generate
 RUN npx tsc
 
 FROM node:22-slim AS runner
