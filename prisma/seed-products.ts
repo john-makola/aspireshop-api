@@ -4,6 +4,28 @@ import * as path from "path";
 
 const prisma = new PrismaClient();
 
+async function withRetry<T>(label: string, fn: () => Promise<T>, maxAttempts = 8): Promise<T> {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      return await fn();
+    } catch (error: any) {
+      lastError = error;
+      const code = error?.code;
+      const message = String(error?.message || "");
+      const transient = code === "P1001" || message.includes("Can't reach database server");
+
+      if (!transient || attempt === maxAttempts) {
+        throw error;
+      }
+
+      console.warn(`⚠️  ${label} failed (attempt ${attempt}/${maxAttempts}), retrying...`);
+    }
+  }
+
+  throw lastError;
+}
+
 // ─── Category → folder mapping ──────────────────────────────────────
 const CATEGORY_FOLDER_MAP: Record<string, string> = {
   paper: "Paper Products",
@@ -1452,18 +1474,20 @@ async function main() {
 
   // First, delete existing products and related data
   console.log("🗑️  Clearing existing product data...");
-  await prisma.quoteItem.deleteMany();
-  await prisma.orderItem.deleteMany();
-  await prisma.cartItem.deleteMany();
-  await prisma.productTag.deleteMany();
-  await prisma.pricingTier.deleteMany();
-  await prisma.customizationOption.deleteMany();
-  await prisma.productImage.deleteMany();
-  await prisma.product.deleteMany();
+  await withRetry("clear product data", async () => {
+    await prisma.quoteItem.deleteMany();
+    await prisma.orderItem.deleteMany();
+    await prisma.cartItem.deleteMany();
+    await prisma.productTag.deleteMany();
+    await prisma.pricingTier.deleteMany();
+    await prisma.customizationOption.deleteMany();
+    await prisma.productImage.deleteMany();
+    await prisma.product.deleteMany();
+  });
   console.log("✅ Existing product data cleared\n");
 
   // Fetch existing categories
-  const categories = await prisma.category.findMany();
+  const categories = await withRetry("load categories", () => prisma.category.findMany());
   const catMap = new Map(categories.map((c) => [c.slug, c]));
 
   // Also ensure we have categories for general, sports
@@ -1473,7 +1497,7 @@ async function main() {
   ];
   for (const ac of additionalCats) {
     if (!catMap.has(ac.slug)) {
-      const cat = await prisma.category.create({ data: ac });
+      const cat = await withRetry(`create category ${ac.slug}`, () => prisma.category.create({ data: ac }));
       catMap.set(cat.slug, cat);
       console.log(`📁 Created category: ${ac.name}`);
     }
@@ -1527,8 +1551,10 @@ async function main() {
         meta = getProductMeta(group.baseName, catSlug);
       }
 
-      // Create product
-      const product = await prisma.product.create({
+      const encodedFolder = encodeURIComponent(folder);
+
+      // Create product + all related rows atomically.
+      await withRetry(`create product ${slug}`, () => prisma.product.create({
         data: {
           name: productName,
           slug,
@@ -1543,56 +1569,36 @@ async function main() {
           isCustomizable: meta.isCustomizable || false,
           minOrderQty: meta.minOrderQty,
           availability: meta.availability || "in-stock",
+          images: {
+            create: group.files.map((file, i) => ({
+              url: `/categories/${encodedFolder}/${encodeURIComponent(file)}`,
+              alt: `${productName} - Image ${i + 1}`,
+              isPrimary: i === 0,
+              sortOrder: i,
+            })),
+          },
+          tags: {
+            create: meta.tags.map((tag) => ({ tag })),
+          },
+          pricingTiers: {
+            create: meta.tiers.map((tier) => ({
+              minQty: tier.minQty,
+              maxQty: tier.maxQty,
+              price: tier.price,
+            })),
+          },
+          customizationOptions: {
+            create: meta.customizations.map((cust) => ({
+              name: cust.name,
+              type: cust.type,
+              options: cust.options,
+              required: cust.required,
+            })),
+          },
         },
-      });
+      }));
 
-      // Create images
-      for (let i = 0; i < group.files.length; i++) {
-        const encodedFolder = encodeURIComponent(folder);
-        const encodedFile = encodeURIComponent(group.files[i]);
-        await prisma.productImage.create({
-          data: {
-            productId: product.id,
-            url: `/categories/${encodedFolder}/${encodedFile}`,
-            alt: `${productName} - Image ${i + 1}`,
-            isPrimary: i === 0,
-            sortOrder: i,
-          },
-        });
-        totalImages++;
-      }
-
-      // Create tags
-      for (const tag of meta.tags) {
-        await prisma.productTag.create({
-          data: { productId: product.id, tag },
-        });
-      }
-
-      // Create pricing tiers
-      for (const tier of meta.tiers) {
-        await prisma.pricingTier.create({
-          data: {
-            productId: product.id,
-            minQty: tier.minQty,
-            maxQty: tier.maxQty,
-            price: tier.price,
-          },
-        });
-      }
-
-      // Create customization options
-      for (const cust of meta.customizations) {
-        await prisma.customizationOption.create({
-          data: {
-            productId: product.id,
-            name: cust.name,
-            type: cust.type,
-            options: cust.options,
-            required: cust.required,
-          },
-        });
-      }
+      totalImages += group.files.length;
 
       totalProducts++;
     }

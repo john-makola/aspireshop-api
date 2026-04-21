@@ -7,7 +7,7 @@
     "build": "npx prisma generate && tsc",
     "start": "node dist/server.js",
     "db:push": "npx prisma db push",
-    "db:seed": "npx tsx prisma/seed.ts && node prisma/seed-categories.js && node prisma/seed-sliders.js",
+    "db:seed": "npx tsx prisma/seed.ts && node prisma/seed-categories.js && npx tsx prisma/seed-products.ts && node prisma/seed-sliders.js",
     "db:generate": "npx prisma generate",
     "postinstall": "npx prisma generate"
   },
