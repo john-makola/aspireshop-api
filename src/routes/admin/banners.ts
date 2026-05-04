@@ -25,6 +25,7 @@ router.post("/", async (req: Request, res: Response) => {
       isActive,
       sortOrder,
       displayType,
+      imageLayout,
       bgColor,
       textColor,
     } = req.body;
@@ -44,6 +45,7 @@ router.post("/", async (req: Request, res: Response) => {
         isActive: isActive ?? true,
         sortOrder: sortOrder ?? 0,
         displayType: displayType || "popup",
+        imageLayout: imageLayout || "cover",
         bgColor: bgColor || "#059669",
         textColor: textColor || "#ffffff",
       },
@@ -69,6 +71,7 @@ router.patch("/", async (req: Request, res: Response) => {
       isActive,
       sortOrder,
       displayType,
+      imageLayout,
       bgColor,
       textColor,
     } = req.body;
@@ -88,6 +91,7 @@ router.patch("/", async (req: Request, res: Response) => {
     if (isActive !== undefined) updateData.isActive = isActive;
     if (sortOrder !== undefined) updateData.sortOrder = sortOrder;
     if (displayType !== undefined) updateData.displayType = displayType;
+    if (imageLayout !== undefined) updateData.imageLayout = imageLayout;
     if (bgColor !== undefined) updateData.bgColor = bgColor;
     if (textColor !== undefined) updateData.textColor = textColor;
 

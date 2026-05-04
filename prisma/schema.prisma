@@ -250,10 +250,11 @@ model Banner {
   buttonText  String?  @default("Shop Now")
   isActive    Boolean  @default(true)
   sortOrder   Int      @default(0)
-  displayType String   @default("popup") // popup | inline
-  bgColor     String?  @default("#059669")
-  textColor   String?  @default("#ffffff")
-  createdAt   DateTime @default(now())
+  displayType  String   @default("popup") // popup | inline
+  imageLayout  String   @default("cover") // cover | contain | full
+  bgColor      String?  @default("#059669")
+  textColor    String?  @default("#ffffff")
+  createdAt    DateTime @default(now())
 }
 
 // ─── Hero Sliders ────────────────────────────────────────────────────
