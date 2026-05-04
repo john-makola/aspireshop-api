@@ -1,6 +1,6 @@
 import { Router, Request, Response } from "express";
 import multer from "multer";
-import { v4 as uuid } from "uuid";
+import { randomUUID as uuid } from "crypto";
 import path from "path";
 import fs from "fs";
 

@@ -6,10 +6,9 @@ import path from "path";
 
 const router = Router();
 
-// GET /api/admin/sliders — public (homepage needs it)
-router.get("/", async (_req: Request, res: Response) => {
+// GET /api/admin/sliders — returns ALL sliders for admin management
+router.get("/", requireAdmin, async (_req: Request, res: Response) => {
   const sliders = await prisma.slider.findMany({
-    where: { isActive: true },
     orderBy: { sortOrder: "asc" },
   });
   res.json(sliders);
